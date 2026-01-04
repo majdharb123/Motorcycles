@@ -177,7 +177,7 @@ Widget buildBikeCard(Product product, BuildContext context) {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Image.network(
-              "http://127.0.0.1:5000/uploads/${product.image}",
+              "https://motorcycles-zroi.onrender.com/uploads/${product.image}",
               height: 120,
               width: 220,
               fit: BoxFit.contain,
