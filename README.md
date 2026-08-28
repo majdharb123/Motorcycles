@@ -1,19 +1,19 @@
 # 🏍️ Motorcycles Mobile App
 
-A full-stack mobile application tailored for motorcycles, featuring a cross-platform frontend and a robust, secure backend API.[cite: 5, 6] This project demonstrates mobile UI development combined with relational database management and secure data flow.
+A full-stack mobile application tailored for motorcycles, featuring a cross-platform frontend and a robust, secure backend API.This project demonstrates mobile UI development combined with relational database management and secure data flow.
 
 ## ✨ Key Features
-*   **Cross-Platform UI:** Smooth and responsive mobile experience built with Flutter.[cite: 6]
-*   **Secure Authentication:** User login and registration protected by JWT and Bcrypt password hashing.[cite: 5]
-*   **Relational Database:** Efficient data storage and retrieval using MySQL.[cite: 5]
-*   **Media Uploads:** Integrated file handling for images and media using Multer.[cite: 5]
-*   **RESTful API:** Scalable backend architecture built on Node.js and Express.[cite: 5]
+*   **Cross-Platform UI:** Smooth and responsive mobile experience built with Flutter.
+*   **Secure Authentication:** User login and registration protected by JWT and Bcrypt password hashing.
+*   **Relational Database:** Efficient data storage and retrieval using MySQL.
+*   **Media Uploads:** Integrated file handling for images and media using Multer.
+*   **RESTful API:** Scalable backend architecture built on Node.js.
 
 ## 🛠️ Tech Stack
-*   **Frontend:** Flutter, Dart[cite: 6]
-*   **Backend:** Node.js, Express.js[cite: 5]
-*   **Database:** MySQL[cite: 5]
-*   **Security:** JWT, Bcrypt[cite: 5]
+*   **Frontend:** Flutter
+*   **Backend:** Node.js
+*   **Database:** MySQL
+*   **Security:** JWT, Bcrypt
 
 ## 🚀 Getting Started
 
