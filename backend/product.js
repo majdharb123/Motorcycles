@@ -91,6 +91,7 @@ product.get("/product", (req, res) => {
 
 //Delete Product
 product.delete("/product/:id", requireAdmin, (req, res) => {
+  const productId = req.params.id;
   const sql = "SELECT image FROM products WHERE id = ?";
   db.query(sql, [productId], (err, data) => {
     if (err) {
