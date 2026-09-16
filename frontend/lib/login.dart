@@ -107,7 +107,7 @@ class _LoginState extends State<Login> {
                       labelText: 'Email',
                       prefixIcon: Icon(Icons.email_outlined),
                     ),
-                   validator: (v) => v!.contains("@") ? null : "Invalid email",
+                    validator: (v) => v!.contains("@") ? null : "Invalid email",
                   ),
                   const SizedBox(height: 16),
                   TextFormField(
@@ -140,8 +140,8 @@ class _LoginState extends State<Login> {
                       ),
                     ),
                     child: _loading
-                          ? const CircularProgressIndicator()
-                          : const Text("Login"),
+                        ? const CircularProgressIndicator()
+                        : const Text("Login"),
                   ),
                   const SizedBox(height: 16),
                   Row(

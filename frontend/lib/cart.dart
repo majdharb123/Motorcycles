@@ -3,7 +3,6 @@ import 'package:flutter_rating_bar/flutter_rating_bar.dart';
 import 'package:go_router/go_router.dart';
 import 'models/product.dart';
 
-
 class Cart extends StatefulWidget {
   final Product product;
 
@@ -55,8 +54,10 @@ class _CartState extends State<Cart> {
               /// PRICE
               Text(
                 "\$${p.price}",
-                style:
-                    const TextStyle(fontSize: 25, fontWeight: FontWeight.bold),
+                style: const TextStyle(
+                  fontSize: 25,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
 
               const SizedBox(height: 10),
@@ -73,10 +74,7 @@ class _CartState extends State<Cart> {
               const SizedBox(height: 20),
 
               /// DESCRIPTION
-              Text(
-                p.description,
-                style: const TextStyle(fontSize: 15),
-              ),
+              Text(p.description, style: const TextStyle(fontSize: 15)),
 
               const SizedBox(height: 30),
 

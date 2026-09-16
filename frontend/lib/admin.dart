@@ -1,12 +1,13 @@
-import 'dart:io';
-import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
-import 'package:go_router/go_router.dart';
-import 'package:image_picker/image_picker.dart';
-import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'models/product.dart';
+import 'dart:typed_data';
 
+import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+import 'package:http/http.dart' as http;
+import 'package:image_picker/image_picker.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import 'models/product.dart';
 
 class Admin extends StatefulWidget {
   const Admin({super.key});
@@ -16,8 +17,9 @@ class Admin extends StatefulWidget {
 }
 
 class _AdminState extends State<Admin> {
-  final _formKey = GlobalKey<FormState>();
+  static const String baseUrl = 'https://motorcycles-zroi.onrender.com';
 
+  final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _priceController = TextEditingController();
   final _starController = TextEditingController();
@@ -29,12 +31,11 @@ class _AdminState extends State<Admin> {
   final _weightController = TextEditingController();
   final _mileageController = TextEditingController();
 
-  File? _pickedImage;
-  Uint8List? _webImage;
-  XFile? _imageFile;
-
+  Uint8List? _imageBytes;
+  String? _imageName;
   List<Product> products = [];
-  final String baseUrl = "https://motorcycles-zroi.onrender.com";
+  bool _isLoadingProducts = false;
+  bool _isSaving = false;
 
   @override
   void initState() {
@@ -42,115 +43,177 @@ class _AdminState extends State<Admin> {
     fetchProducts();
   }
 
-  Future<void> fetchProducts() async {
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _priceController.dispose();
+    _starController.dispose();
+    _descriptionController.dispose();
+    _engineController.dispose();
+    _powerController.dispose();
+    _topSpeedController.dispose();
+    _fuelController.dispose();
+    _weightController.dispose();
+    _mileageController.dispose();
+    super.dispose();
+  }
+
+  Future<String?> _getToken() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString('token');
+  }
+
+  void _showMessage(String message, {bool isError = false}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: isError ? Colors.red : Colors.green,
+      ),
+    );
+  }
+
+  String _responseMessage(http.Response response, String fallback) {
     try {
-      final response = await http.get(Uri.parse("$baseUrl/api/product"));
+      final body = jsonDecode(response.body);
+      if (body is Map<String, dynamic> && body['message'] != null) {
+        return body['message'].toString();
+      }
+    } catch (_) {
+      // The server did not return JSON, so use the fallback message.
+    }
+    return fallback;
+  }
+
+  Future<void> fetchProducts() async {
+    if (mounted) setState(() => _isLoadingProducts = true);
+
+    try {
+      final response = await http.get(Uri.parse('$baseUrl/api/product'));
 
       if (response.statusCode == 200) {
-        final List data = jsonDecode(response.body);
+        final decoded = jsonDecode(response.body);
+        if (decoded is! List) {
+          throw const FormatException('Invalid products response');
+        }
 
-        setState(() {
-          products = data.map((item) {
-            return Product(
-              id: item['id'].toString(),
-              name: item['name'] ?? '',
-              description: item['description'] ?? '',
-              price: double.tryParse(item['price'].toString()) ?? 0.0,
-              star: int.tryParse(item['star']?.toString() ?? '0') ?? 0,
-              engine: item['engine'] ?? '',
-              power: int.tryParse(item['power']?.toString() ?? '0') ?? 0,
-              topSpeed: int.tryParse(item['topspeed']?.toString() ?? '0') ?? 0,
-              fuel: int.tryParse(item['fuel']?.toString() ?? '0') ?? 0,
-              weight: int.tryParse(item['weight']?.toString() ?? '0') ?? 0,
-              mileage: int.tryParse(item['mileage']?.toString() ?? '0') ?? 0,
-              image: item['image'] ?? '',
-            );
-          }).toList();
-        });
+        final fetchedProducts = decoded.map<Product>((item) {
+          return Product(
+            id: item['id'].toString(),
+            name: item['name']?.toString() ?? '',
+            description: item['description']?.toString() ?? '',
+            price: double.tryParse(item['price']?.toString() ?? '') ?? 0,
+            star: int.tryParse(item['star']?.toString() ?? '') ?? 0,
+            engine: item['engine']?.toString() ?? '',
+            power: int.tryParse(item['power']?.toString() ?? '') ?? 0,
+            topSpeed: int.tryParse(item['topspeed']?.toString() ?? '') ?? 0,
+            fuel: int.tryParse(item['fuel']?.toString() ?? '') ?? 0,
+            weight: int.tryParse(item['weight']?.toString() ?? '') ?? 0,
+            mileage: int.tryParse(item['mileage']?.toString() ?? '') ?? 0,
+            image: item['image']?.toString() ?? '',
+          );
+        }).toList();
+
+        if (mounted) setState(() => products = fetchedProducts);
       } else {
-        debugPrint("Failed to fetch products: ${response.statusCode}");
+        _showMessage(
+          _responseMessage(response, 'Failed to load products'),
+          isError: true,
+        );
       }
-    } catch (e) {
-      debugPrint("Error fetching products: $e");
+    } catch (error) {
+      debugPrint('Error fetching products: $error');
+      _showMessage('Could not connect to the server', isError: true);
+    } finally {
+      if (mounted) setState(() => _isLoadingProducts = false);
     }
   }
 
   Future<void> _pickImage() async {
-    final picker = ImagePicker();
-    final XFile? pickedFile = await picker.pickImage(
-      source: ImageSource.gallery,
-      imageQuality: 70,
-    );
+    try {
+      final pickedFile = await ImagePicker().pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 70,
+      );
 
-    if (pickedFile != null) {
-      if (kIsWeb) {
-        final bytes = await pickedFile.readAsBytes();
+      if (pickedFile == null) return;
+      final bytes = await pickedFile.readAsBytes();
+
+      if (mounted) {
         setState(() {
-          _webImage = bytes;
-          _imageFile = pickedFile;
-        });
-      } else {
-        setState(() {
-          _pickedImage = File(pickedFile.path);
-          _imageFile = pickedFile;
+          _imageBytes = bytes;
+          _imageName = pickedFile.name;
         });
       }
+    } catch (error) {
+      debugPrint('Image picker error: $error');
+      _showMessage('Could not select the image', isError: true);
     }
   }
 
   Future<void> _addProduct() async {
-    if (_formKey.currentState!.validate() && _imageFile != null) {
-      var request = http.MultipartRequest(
-        'POST',
-        Uri.parse("$baseUrl/api/addProduct"),
-      );
+    if (!(_formKey.currentState?.validate() ?? false)) return;
 
-      request.fields['name'] = _nameController.text;
-      request.fields['description'] = _descriptionController.text;
-      request.fields['price'] = _priceController.text;
-      request.fields['star'] = _starController.text;
-      request.fields['engine'] = _engineController.text;
-      request.fields['power'] = _powerController.text;
-      request.fields['topspeed'] = _topSpeedController.text;
-      request.fields['fuel'] = _fuelController.text;
-      request.fields['weight'] = _weightController.text;
-      request.fields['mileage'] = _mileageController.text;
+    if (_imageBytes == null || _imageName == null) {
+      _showMessage('Please select a product image', isError: true);
+      return;
+    }
 
-      if (kIsWeb) {
-        request.files.add(
-          http.MultipartFile.fromBytes(
-            'image',
-            _webImage!,
-            filename: 'upload.jpg',
-          ),
-        );
-      } else {
-        request.files.add(
-          await http.MultipartFile.fromPath('image', _pickedImage!.path),
-        );
-      }
+    final token = await _getToken();
+    if (token == null || token.isEmpty) {
+      _showMessage('Your session expired. Please log in again.', isError: true);
+      return;
+    }
 
-      try {
-        final streamedResponse = await request.send();
-        final response = await http.Response.fromStream(streamedResponse);
+    if (mounted) setState(() => _isSaving = true);
 
-        if (response.statusCode == 200) {
-          _clearForm();
-          fetchProducts();
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Added successfully'),
-              backgroundColor: Colors.green,
+    final request =
+        http.MultipartRequest('POST', Uri.parse('$baseUrl/api/addProduct'))
+          ..headers['Authorization'] = 'Bearer $token'
+          ..fields.addAll({
+            'name': _nameController.text.trim(),
+            'description': _descriptionController.text.trim(),
+            'price': _priceController.text.trim(),
+            'star': _starController.text.trim(),
+            'engine': _engineController.text.trim(),
+            'power': _powerController.text.trim(),
+            'topspeed': _topSpeedController.text.trim(),
+            'fuel': _fuelController.text.trim(),
+            'weight': _weightController.text.trim(),
+            'mileage': _mileageController.text.trim(),
+          })
+          ..files.add(
+            http.MultipartFile.fromBytes(
+              'image',
+              _imageBytes!,
+              filename: _imageName,
             ),
           );
-        }
-      } catch (e) {
-        print("Error uploading: $e");
+
+    try {
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        _clearForm();
+        await fetchProducts();
+        _showMessage('Product added successfully');
+      } else if (response.statusCode == 401 || response.statusCode == 403) {
+        _showMessage(
+          _responseMessage(response, 'Admin access is required'),
+          isError: true,
+        );
+      } else {
+        _showMessage(
+          _responseMessage(response, 'Failed to add the product'),
+          isError: true,
+        );
       }
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please fill all fields and pick image')),
-      );
+    } catch (error) {
+      debugPrint('Error adding product: $error');
+      _showMessage('Could not connect to the server', isError: true);
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
     }
   }
 
@@ -165,27 +228,64 @@ class _AdminState extends State<Admin> {
     _fuelController.clear();
     _weightController.clear();
     _mileageController.clear();
-    setState(() {
-      _pickedImage = null;
-      _webImage = null;
-      _imageFile = null;
-    });
+    if (mounted) {
+      setState(() {
+        _imageBytes = null;
+        _imageName = null;
+      });
+    }
   }
 
   Future<void> _deleteProduct(String id) async {
-    try {
-      final response = await http.delete(Uri.parse("$baseUrl/api/product/$id"));
-      if (response.statusCode == 200) {
-        fetchProducts();
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Deleted successfully'),
-            backgroundColor: Colors.red,
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete product'),
+        content: const Text('Are you sure you want to delete this product?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
           ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    final token = await _getToken();
+    if (token == null || token.isEmpty) {
+      _showMessage('Your session expired. Please log in again.', isError: true);
+      return;
+    }
+
+    try {
+      final response = await http.delete(
+        Uri.parse('$baseUrl/api/product/$id'),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+
+      if (response.statusCode == 200) {
+        await fetchProducts();
+        _showMessage('Product deleted successfully');
+      } else if (response.statusCode == 401 || response.statusCode == 403) {
+        _showMessage(
+          _responseMessage(response, 'Admin access is required'),
+          isError: true,
+        );
+      } else {
+        _showMessage(
+          _responseMessage(response, 'Failed to delete the product'),
+          isError: true,
         );
       }
-    } catch (e) {
-      debugPrint("Delete error: $e");
+    } catch (error) {
+      debugPrint('Delete error: $error');
+      _showMessage('Could not connect to the server', isError: true);
     }
   }
 
@@ -199,10 +299,12 @@ class _AdminState extends State<Admin> {
       keyboardType: keyboardType,
       decoration: InputDecoration(labelText: label),
       validator: (value) {
-        if (value == null || value.isEmpty) return 'Required';
+        final text = value?.trim() ?? '';
+        if (text.isEmpty) return 'Required';
         if (keyboardType == TextInputType.number &&
-            double.tryParse(value) == null)
+            double.tryParse(text) == null) {
           return 'Invalid number';
+        }
         return null;
       },
     );
@@ -219,177 +321,187 @@ class _AdminState extends State<Admin> {
           onPressed: () => context.go('/'),
         ),
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Form لإضافة المنتج
-            Card(
-              elevation: 3,
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Form(
-                  key: _formKey,
-                  child: Column(
-                    children: [
-                      Text(
-                        'Add New Product',
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.bold,
+      body: RefreshIndicator(
+        onRefresh: fetchProducts,
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Card(
+                elevation: 3,
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Form(
+                    key: _formKey,
+                    child: Column(
+                      children: [
+                        Text(
+                          'Add New Product',
+                          style: Theme.of(context).textTheme.titleLarge
+                              ?.copyWith(fontWeight: FontWeight.bold),
                         ),
-                      ),
-                      const SizedBox(height: 16),
-                      _buildTextField(_nameController, 'Name'),
-                      _buildTextField(
-                        _priceController,
-                        'Price',
-                        keyboardType: TextInputType.number,
-                      ),
-                      _buildTextField(
-                        _starController,
-                        'Star',
-                        keyboardType: TextInputType.number,
-                      ),
-                      _buildTextField(_descriptionController, 'Description'),
-                      _buildTextField(_engineController, 'Engine'),
-                      _buildTextField(
-                        _powerController,
-                        'Power',
-                        keyboardType: TextInputType.number,
-                      ),
-                      _buildTextField(
-                        _topSpeedController,
-                        'Top Speed',
-                        keyboardType: TextInputType.number,
-                      ),
-                      _buildTextField(
-                        _fuelController,
-                        'Fuel Capacity',
-                        keyboardType: TextInputType.number,
-                      ),
-                      _buildTextField(
-                        _weightController,
-                        'Weight',
-                        keyboardType: TextInputType.number,
-                      ),
-                      _buildTextField(
-                        _mileageController,
-                        'Mileage',
-                        keyboardType: TextInputType.number,
-                      ),
-                      const SizedBox(height: 16),
-                      Row(
-                        children: [
-                          ElevatedButton.icon(
-                            onPressed: _pickImage,
-                            icon: const Icon(Icons.image),
-                            label: const Text('Pick Image'),
-                          ),
-                          const SizedBox(width: 12),
-                          if (_imageFile != null)
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(8),
-                              child: kIsWeb
-                                  ? Image.memory(
-                                      _webImage!,
-                                      width: 80,
-                                      height: 80,
-                                      fit: BoxFit.cover,
-                                    )
-                                  : Image.file(
-                                      _pickedImage!,
-                                      width: 80,
-                                      height: 80,
-                                      fit: BoxFit.cover,
-                                    ),
-                            )
-                          else
-                            const Text('No image'),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      ElevatedButton(
-                        onPressed: _addProduct,
-                        child: const Text('Add Product'),
-                      ),
-                    ],
+                        const SizedBox(height: 16),
+                        _buildTextField(_nameController, 'Name'),
+                        _buildTextField(
+                          _priceController,
+                          'Price',
+                          keyboardType: TextInputType.number,
+                        ),
+                        _buildTextField(
+                          _starController,
+                          'Star',
+                          keyboardType: TextInputType.number,
+                        ),
+                        _buildTextField(_descriptionController, 'Description'),
+                        _buildTextField(_engineController, 'Engine'),
+                        _buildTextField(
+                          _powerController,
+                          'Power',
+                          keyboardType: TextInputType.number,
+                        ),
+                        _buildTextField(
+                          _topSpeedController,
+                          'Top Speed',
+                          keyboardType: TextInputType.number,
+                        ),
+                        _buildTextField(
+                          _fuelController,
+                          'Fuel Capacity',
+                          keyboardType: TextInputType.number,
+                        ),
+                        _buildTextField(
+                          _weightController,
+                          'Weight',
+                          keyboardType: TextInputType.number,
+                        ),
+                        _buildTextField(
+                          _mileageController,
+                          'Mileage',
+                          keyboardType: TextInputType.number,
+                        ),
+                        const SizedBox(height: 16),
+                        Wrap(
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          spacing: 12,
+                          runSpacing: 12,
+                          children: [
+                            ElevatedButton.icon(
+                              onPressed: _isSaving ? null : _pickImage,
+                              icon: const Icon(Icons.image),
+                              label: const Text('Pick Image'),
+                            ),
+                            if (_imageBytes != null)
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: Image.memory(
+                                  _imageBytes!,
+                                  width: 80,
+                                  height: 80,
+                                  fit: BoxFit.cover,
+                                ),
+                              )
+                            else
+                              const Text('No image selected'),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        ElevatedButton(
+                          onPressed: _isSaving ? null : _addProduct,
+                          child: _isSaving
+                              ? const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Text('Add Product'),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
-            ),
-            const SizedBox(height: 32),
-            // عرض المنتجات
-            Text(
-              'Products List',
-              style: Theme.of(
-                context,
-              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 16),
-            Card(
-              elevation: 3,
-              child: products.isEmpty
-                  ? const Padding(
-                      padding: EdgeInsets.all(48.0),
-                      child: Center(child: Text('No products available')),
-                    )
-                  : SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: DataTable(
-                        columns: const [
-                          DataColumn(label: Text('Image')),
-                          DataColumn(label: Text('Name')),
-                          DataColumn(label: Text('Price')),
-                          DataColumn(label: Text('Star')),
-                          DataColumn(label: Text('Engine')),
-                          DataColumn(label: Text('Power')),
-                          DataColumn(label: Text('Top Speed')),
-                          DataColumn(label: Text('Fuel')),
-                          DataColumn(label: Text('Weight')),
-                          DataColumn(label: Text('Mileage')),
-                          DataColumn(label: Text('Action')),
-                        ],
-                        rows: products
-                            .map(
-                              (p) => DataRow(
-                                cells: [
-                                  DataCell(
-                                    p.image != null
-                                        ? Image.network(
-                                            "$baseUrl/api/uploads/${p.image}",
-                                            width: 50,
-                                            height: 50,
-                                            fit: BoxFit.cover,
-                                          )
-                                        : const Icon(Icons.image_not_supported),
-                                  ),
-                                  DataCell(Text(p.name)),
-                                  DataCell(Text('\$${p.price}')),
-                                  DataCell(Text(p.star.toString())),
-                                  DataCell(Text(p.engine)),
-                                  DataCell(Text(p.power.toString())),
-                                  DataCell(Text(p.topSpeed.toString())),
-                                  DataCell(Text(p.fuel.toString())),
-                                  DataCell(Text(p.weight.toString())),
-                                  DataCell(Text(p.mileage.toString())),
-                                  DataCell(
-                                    IconButton(
-                                      icon: const Icon(
-                                        Icons.delete,
-                                        color: Colors.red,
-                                      ),
-                                      onPressed: () => _deleteProduct(p.id),
+              const SizedBox(height: 32),
+              Text(
+                'Products List',
+                style: Theme.of(
+                  context,
+                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 16),
+              Card(
+                elevation: 3,
+                child: _isLoadingProducts
+                    ? const Padding(
+                        padding: EdgeInsets.all(48),
+                        child: Center(child: CircularProgressIndicator()),
+                      )
+                    : products.isEmpty
+                    ? const Padding(
+                        padding: EdgeInsets.all(48),
+                        child: Center(child: Text('No products available')),
+                      )
+                    : SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: DataTable(
+                          columns: const [
+                            DataColumn(label: Text('Image')),
+                            DataColumn(label: Text('Name')),
+                            DataColumn(label: Text('Price')),
+                            DataColumn(label: Text('Star')),
+                            DataColumn(label: Text('Engine')),
+                            DataColumn(label: Text('Power')),
+                            DataColumn(label: Text('Top Speed')),
+                            DataColumn(label: Text('Fuel')),
+                            DataColumn(label: Text('Weight')),
+                            DataColumn(label: Text('Mileage')),
+                            DataColumn(label: Text('Action')),
+                          ],
+                          rows: products.map((product) {
+                            return DataRow(
+                              cells: [
+                                DataCell(
+                                  product.image.isNotEmpty
+                                      ? Image.network(
+                                          '$baseUrl/api/uploads/${product.image}',
+                                          width: 50,
+                                          height: 50,
+                                          fit: BoxFit.cover,
+                                          errorBuilder: (_, __, ___) =>
+                                              const Icon(Icons.broken_image),
+                                        )
+                                      : const Icon(Icons.image_not_supported),
+                                ),
+                                DataCell(Text(product.name)),
+                                DataCell(Text('\$${product.price}')),
+                                DataCell(Text(product.star.toString())),
+                                DataCell(Text(product.engine)),
+                                DataCell(Text(product.power.toString())),
+                                DataCell(Text(product.topSpeed.toString())),
+                                DataCell(Text(product.fuel.toString())),
+                                DataCell(Text(product.weight.toString())),
+                                DataCell(Text(product.mileage.toString())),
+                                DataCell(
+                                  IconButton(
+                                    tooltip: 'Delete product',
+                                    icon: const Icon(
+                                      Icons.delete,
+                                      color: Colors.red,
                                     ),
+                                    onPressed: () => _deleteProduct(product.id),
                                   ),
-                                ],
-                              ),
-                            )
-                            .toList(),
+                                ),
+                              ],
+                            );
+                          }).toList(),
+                        ),
                       ),
-                    ),
-            ),
-          ],
+              ),
+            ],
+          ),
         ),
       ),
     );

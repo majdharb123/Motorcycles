@@ -6,7 +6,6 @@ import 'package:http/http.dart' as http;
 import 'package:flutter_rating_bar/flutter_rating_bar.dart';
 import 'models/product.dart';
 
-
 /// ================== HOME PAGE ==================
 class Home extends StatefulWidget {
   const Home({super.key});
@@ -119,7 +118,9 @@ class _HomeState extends State<Home> {
                         Text(
                           "Hi, ${user!['name']}",
                           style: const TextStyle(
-                              fontSize: 18, fontWeight: FontWeight.bold),
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                         const SizedBox(width: 10),
                         if (user!['isAdmin'] == 1)
@@ -146,13 +147,9 @@ class _HomeState extends State<Home> {
 
                 return Row(
                   children: [
-                    Expanded(
-                      child: buildBikeCard(products[first], context),
-                    ),
+                    Expanded(child: buildBikeCard(products[first], context)),
                     if (second < products.length)
-                      Expanded(
-                        child: buildBikeCard(products[second], context),
-                      )
+                      Expanded(child: buildBikeCard(products[second], context))
                     else
                       const Expanded(child: SizedBox()),
                   ],
@@ -185,13 +182,11 @@ Widget buildBikeCard(Product product, BuildContext context) {
             const SizedBox(height: 8),
             Text(
               product.name,
-              style: const TextStyle(
-                  fontWeight: FontWeight.bold, fontSize: 20),
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
             ),
             Text(
               "\$${product.price}",
-              style:
-                  const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
             RatingBarIndicator(
               rating: product.star.toDouble(),
