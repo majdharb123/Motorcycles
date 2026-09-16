@@ -1,35 +1,41 @@
 const express = require("express");
 const cors = require("cors");
-require("dotenv").config();
 const path = require("path");
+
+require("dotenv").config();
 
 const app = express();
 
 app.use(cors());
 app.use(express.json());
 
-// API routes
+// Authentication routes
 const authRoutes = require("./Auth");
 app.use("/api", authRoutes);
 
+// Product routes
 const productRoutes = require("./product");
 app.use("/api", productRoutes);
 
-// uploads
+// Uploaded images
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
-// Flutter Web
-const flutterBuildPath = path.join(__dirname, "../test/build/web");
-app.use(express.static(flutterBuildPath));
-
-// ✅ الحل النهائي
-app.use((req, res) => {
-  res.sendFile(
-    path.join(flutterBuildPath, "index.html")
-  );
+// Root endpoint
+app.get("/", (req, res) => {
+  res.status(200).json({
+    message: "Motorcycles API is running",
+  });
 });
 
-const PORT = process.env.PORT || 10000;
+// Unknown routes
+app.use((req, res) => {
+  res.status(404).json({
+    message: "Route not found",
+  });
+});
+
+const PORT = process.env.PORT || 5000;
+
 app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`Server running on port ${PORT}`);
 });
