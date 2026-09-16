@@ -56,7 +56,7 @@ A full-stack mobile application tailored for motorcycles, featuring a cross-plat
 **Majd Harb**
 * **LinkedIn:** [https://www.linkedin.com/in/majd-harb-cs/]
 * **GitHub:** [https://github.com/majdharb123]
-* **Email:** [majdhaeb37@gmail.com]
+* **Email:** [majdharb37@gmail.com]
 
 ---
 *This project was built to demonstrate full-stack mobile development capabilities.*
