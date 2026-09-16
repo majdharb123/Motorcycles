@@ -40,9 +40,13 @@ auth.post("/login", async (req, res) => {
     if (!isMatch) return res.status(400).json({ message: "Wrong password" });
 
     const token = jwt.sign(
-      { id: user.id, email: user.email },
-      process.env.JWT_SECRET || "fallback_secret_key",
-      { expiresIn: "1h" }
+      {
+        id: user.id,
+        email: user.email,
+        isAdmin: Boolean(user.is_admin),
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: "1h" },
     );
 
     res.json({
@@ -57,6 +61,5 @@ auth.post("/login", async (req, res) => {
     });
   });
 });
-
 
 module.exports = auth;

@@ -3,6 +3,7 @@ const db = require("./db");
 const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
+const requireAdmin = require("./adminAuth");
 
 const product = express.Router();
 product.use("/uploads", express.static("uploads"));
@@ -17,36 +18,64 @@ const storage = multer.diskStorage({
 const upload = multer({ storage: storage });
 
 //Add Product
-product.post("/addProduct", upload.single("image"), (req, res) => {
-  const { name,price,star,description,engine,power,topspeed,fuel,weight,mileage } = req.body;
-  const image = req.file ? req.file.filename : null;
-  if (
-    !name ||
-    !price ||
-    !star || 
-    !description ||
-    !engine ||
-    !power ||
-    !topspeed ||
-    !fuel ||
-    !weight ||
-    !mileage
-  ) {
-    return res.status(400).json({ message: "All fields are required" });
-  }
-  const sql = `INSERT INTO products (name,price,star,description,engine,power,topspeed,fuel,weight,mileage,image) VALUES (?,?,?,?,?,?,?,?,?,?,?)`;
-  db.query(
-    sql,
-    [ name,price,star,description,engine,power,topspeed,fuel,weight,mileage, image],
-    (err, result) => {
-      if (err) {
-        console.log(err);
-        return res.status(500).json({ message: "Error Adding Product" });
-      }
-      res.json({ message: "Added successful" });
+product.post(
+  "/addProduct",
+  requireAdmin,
+  upload.single("image"),
+  (req, res) => {
+    const {
+      name,
+      price,
+      star,
+      description,
+      engine,
+      power,
+      topspeed,
+      fuel,
+      weight,
+      mileage,
+    } = req.body;
+    const image = req.file ? req.file.filename : null;
+    if (
+      !name ||
+      !price ||
+      !star ||
+      !description ||
+      !engine ||
+      !power ||
+      !topspeed ||
+      !fuel ||
+      !weight ||
+      !mileage
+    ) {
+      return res.status(400).json({ message: "All fields are required" });
     }
-  );
-});
+    const sql = `INSERT INTO products (name,price,star,description,engine,power,topspeed,fuel,weight,mileage,image) VALUES (?,?,?,?,?,?,?,?,?,?,?)`;
+    db.query(
+      sql,
+      [
+        name,
+        price,
+        star,
+        description,
+        engine,
+        power,
+        topspeed,
+        fuel,
+        weight,
+        mileage,
+        image,
+      ],
+      (err, result) => {
+        if (err) {
+          console.log(err);
+          return res.status(500).json({ message: "Error Adding Product" });
+        }
+        res.json({ message: "Added successful" });
+      },
+    );
+  },
+);
 
 product.get("/product", (req, res) => {
   const sql = `SELECT * FROM products `;
@@ -61,8 +90,7 @@ product.get("/product", (req, res) => {
 });
 
 //Delete Product
-product.delete("/product/:id", (req, res) => {
-  const productId = req.params.id;
+product.delete("/product/:id", requireAdmin, (req, res) => {
   const sql = "SELECT image FROM products WHERE id = ?";
   db.query(sql, [productId], (err, data) => {
     if (err) {
