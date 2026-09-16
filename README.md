@@ -31,7 +31,7 @@ A full-stack mobile application tailored for motorcycles, featuring a cross-plat
     ```bash
     npm install
     ```
-3.  **Environment Variables:** Configure your `.env` file with your database credentials and JWT secret key.[cite: 5]
+3.  **Environment Variables:** Configure your `.env` file with your database credentials and JWT secret key.
 4.  **Start the server:**
     ```bash
     node server.js
